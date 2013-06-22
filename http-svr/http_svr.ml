@@ -249,6 +249,15 @@ let escape uri =
 exception Too_many_headers
 exception Generic_error of string
 
+(** Parses strings of the form a=b;c=d into ["a", "b"; "c", "d"] *)
+(* XXX FIXME did a previous version of our software incorrectly marshal cookies with '&' ? *)
+let parse_cookies xs =
+	let kvpairs = List.map (String.split ~limit:2 '=') (String.split ';' xs) in
+	List.map (function
+	| [k; v] -> String.strip String.isspace k, String.strip String.isspace v
+	| _ -> raise Http_parse_failure
+	) kvpairs
+
 let request_of_bio_exn_slow ic =
     (* Try to keep the connection open for a while to prevent spurious End_of_file type 
 	   problems under load *)
@@ -314,7 +323,7 @@ let request_of_bio_exn_slow ic =
 			| _ -> [] in
 	let headers = read_rest_of_headers 242 in
 	{ req with
-		Request.cookie = (Http.parse_keyvalpairs !cookie);
+		Request.cookie = (parse_cookies !cookie);
 		content_length = if !content_length = -1L then None else Some(!content_length);
 		auth = !auth;
 		task = !task;
@@ -365,7 +374,7 @@ let request_of_bio_exn bio =
 						let v = String.strip String.isspace v in
 						true, begin match k with
 							| k when k = Http.Hdr.content_length -> { req with content_length = Some (Int64.of_string v) }
-							| k when k = Http.Hdr.cookie -> { req with cookie = Http.parse_keyvalpairs v }
+							| k when k = Http.Hdr.cookie -> { req with cookie = parse_cookies v }
 							| k when k = Http.Hdr.transfer_encoding -> { req with transfer_encoding = Some v }
 							| k when k = Http.Hdr.accept -> { req with accept = Some v }
 							| k when k = Http.Hdr.authorization -> { req with auth = Some(authorization_of_string v) }
