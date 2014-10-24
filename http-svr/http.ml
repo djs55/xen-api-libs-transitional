@@ -257,11 +257,18 @@ let make_frame_header headers =
 	   HTTP response. *)
 	Printf.sprintf "FRAME %012d" (String.length headers)
 
+let expected_prefix = "FRAME "
+let expected_prefix' = String.length expected_prefix
+
 let read_frame_header buf =
 	let prefix = String.sub buf 0 frame_header_length in
-	try
-		Scanf.sscanf prefix "FRAME %012d" (fun x -> Some x)
-	with _ -> None
+	let is_digit = function '0'..'9' -> true | _ -> false in
+	let prefix_prefix = String.sub prefix 0 expected_prefix' in
+	let prefix_suffix = String.sub prefix expected_prefix' (frame_header_length - expected_prefix') in
+	let rec all p s i = (String.length s = i) || (p s.[i] && (all p s (i+1))) in
+	if prefix_prefix = expected_prefix && all is_digit prefix_suffix 0
+	then Some (int_of_string prefix_suffix)
+	else None
 
 let read_http_request_header buf fd =
 	Unixext.really_read fd buf 0 frame_header_length;
